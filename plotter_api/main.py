@@ -1,24 +1,25 @@
-import serial
+from serial import Serial, SerialException
 import time
 import sys
 import glob
 import threading
+import multiprocessing
 import tkinter as tk
 from tkinter import scrolledtext, filedialog
 
 WINDOW_SIZE = '310x460'
 
 
-class PlotterAPI(tk.Frame):
+class PlotterAPI:
     def __init__(self, parent: tk.Tk):
-        super().__init__()
         self.parent = parent
-        self.filename = str()
-        self.serial = serial.Serial()
+        self.serial = Serial()
         self.serial.baudrate = 9600
         self.serial_thread = None
         self.serial_thread = threading.Thread(target=self.read_from_port, daemon=True)
         self.widgets_list = list()
+        self.stop_button_clicked = False
+        self.semaphore = threading.BoundedSemaphore(1)
 
         self.main_frame = tk.LabelFrame(self.parent, padx=5, pady=5)
         self.main_frame.grid(row=0, column=0, sticky=tk.E + tk.W, padx=5, pady=5)
@@ -71,15 +72,23 @@ class PlotterAPI(tk.Frame):
         self.serial_thread.start()
 
     def select_file(self):
-        self.filename = filedialog.askopenfilename(title="Select a file",
-                                                   filetypes=(("G-code files", "*.gcode"), ("All files", "*.*")))
+        filename = filedialog.askopenfilename(title="Select a file",
+                                              filetypes=(("G-code files", "*.gcode"), ("All files", "*.*")))
         self.stop_button.config(state=tk.NORMAL)
+        threading.Thread(target=self.gcode_stream, args=(filename,)).start()
 
-    def gcode_stream(self):
-        pass
+    def gcode_stream(self, filename):
+        file = open(filename, 'r')
+        lines = file.readlines()
+        for line in lines:
+            if self.stop_button_clicked:
+                break
+            self.serial.write(line.encode())
+            self.semaphore.acquire()
 
     def stop_stream(self):
         self.stop_button.config(state=tk.DISABLED)
+        self.stop_button_clicked = True
 
     def refresh_port_list(self, event):
         ports = get_ports_list()
@@ -91,19 +100,20 @@ class PlotterAPI(tk.Frame):
     def select_port(self, port):
         if self.port_var.get() == 1:
             self.port_menu.config(state=tk.DISABLED)
-            if port != self.serial.port:
-                self.serial.close()
-                self.serial.port = port
-                self.serial.open()
+            self.serial.port = port
+            self.serial.open()
         else:
             self.port_menu.config(state=tk.NORMAL)
+            self.serial.close()
 
     def read_from_port(self):
         while True:
-            if self.port_var.get() == 1 and self.serial.port and self.serial.in_waiting:
-                packet = self.serial.readline()
-                self.scroll_text.insert(tk.INSERT, packet.decode('utf'))
+            if self.port_var.get() == 1 and self.serial.isOpen() and self.serial.in_waiting:
+                packet = self.serial.readline().decode('utf')
+                self.scroll_text.insert(tk.INSERT, packet)
                 self.scroll_text.see("end")
+                if packet == 'ok':
+                    self.semaphore.release()
             else:
                 time.sleep(0.2)
 
@@ -123,10 +133,10 @@ def get_ports_list() -> list:
     # add available ports to list
     for port in ports:
         try:
-            s = serial.Serial(port)
+            s = Serial(port)
             s.close()
             result.append(port)
-        except (OSError, serial.SerialException):
+        except (OSError, SerialException):
             pass
     return result
 
@@ -134,6 +144,6 @@ def get_ports_list() -> list:
 if __name__ == '__main__':
     root = tk.Tk()
     root.geometry(WINDOW_SIZE)
-    root.title("Plotter API")
+    root.title("Plotter API by Kowalski1024")
     PlotterAPI(root)
     root.mainloop()
