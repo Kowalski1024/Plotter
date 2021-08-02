@@ -3,11 +3,10 @@ import time
 import sys
 import glob
 import threading
-import multiprocessing
 import tkinter as tk
 from tkinter import scrolledtext, filedialog
 
-WINDOW_SIZE = '310x460'
+WINDOW_SIZE = '324x460'
 
 
 class PlotterAPI:
@@ -49,8 +48,8 @@ class PlotterAPI:
         # G-code transfer
         self.file_frame = tk.LabelFrame(self.main_frame, text="G-code Stream", padx=5, pady=5)
         self.file_frame.grid(row=1, column=0)
-        self.widgets_list.append(
-            tk.Button(self.file_frame, text="Select file", command=self.select_file).grid(row=0, column=0))
+        widget_1 = tk.Button(self.file_frame, text="Select file", command=self.select_file)
+        widget_1.grid(row=0, column=0)
         self.stop_button = tk.Button(self.file_frame, text="STOP", command=self.stop_stream)
         self.stop_button.grid(row=0, column=1)
         self.stop_button.config(state=tk.DISABLED)
@@ -58,33 +57,36 @@ class PlotterAPI:
         # plotter controls
         self.controls_frame = tk.LabelFrame(self.main_frame, text="Plotter Controls", padx=5, pady=5)
         self.controls_frame.grid(row=0, column=2, rowspan=2)
-        self.widgets_list += [
-            tk.Button(self.controls_frame, text="Set Home").grid(row=0, column=1),
-            tk.Button(self.controls_frame, text="Home").grid(row=0, column=0)
-        ]
-        tk.Label(self.controls_frame, text="Arrow keys to jog in x-y axis").grid(row=1, column=0, columnspan=2)
+        widget_2 = tk.Button(self.controls_frame, text="Set Home")
+        widget_2.grid(row=0, column=0)
+        widget_3 = tk.Button(self.controls_frame, text="Home")
+        widget_3.grid(row=0, column=1)
+        widget_4 = tk.Button(self.controls_frame, text="Pen", command=self.change_pen_position)
+        widget_4.grid(row=0, column=2)
+        self.widgets_list += [widget_1, widget_2, widget_3, widget_4]
+        tk.Label(self.controls_frame, text="Arrow keys to jog in x-y axis").grid(row=1, column=0, columnspan=3)
 
         self.parent.columnconfigure(0, weight=1)
         self.parent.rowconfigure(1, weight=1)
         self.serial_frame.rowconfigure(0, weight=1)
         self.serial_frame.columnconfigure(0, weight=1)
 
+        self.controls_state()
         self.serial_thread.start()
 
     def select_file(self):
         filename = filedialog.askopenfilename(title="Select a file",
                                               filetypes=(("G-code files", "*.gcode"), ("All files", "*.*")))
         self.stop_button.config(state=tk.NORMAL)
-        threading.Thread(target=self.gcode_stream, args=(filename,)).start()
+        threading.Thread(target=self.file_stream, args=(filename,)).start()
 
-    def gcode_stream(self, filename):
+    def file_stream(self, filename):
         file = open(filename, 'r')
         lines = file.readlines()
         for line in lines:
             if self.stop_button_clicked:
                 break
-            self.serial.write(line.encode())
-            self.semaphore.acquire()
+            self.write_to_port(line, semaphore=True)
 
     def stop_stream(self):
         self.stop_button.config(state=tk.DISABLED)
@@ -98,17 +100,20 @@ class PlotterAPI:
             menu.add_command(label=port, command=tk._setit(self.menu_str, port))
 
     def select_port(self, port):
-        if self.port_var.get() == 1:
+        if port == 'None':
+            self.port_var.set(0)
+        elif self.port_var.get() == 1:
             self.port_menu.config(state=tk.DISABLED)
             self.serial.port = port
             self.serial.open()
         else:
             self.port_menu.config(state=tk.NORMAL)
             self.serial.close()
+        self.controls_state()
 
     def read_from_port(self):
         while True:
-            if self.port_var.get() == 1 and self.serial.isOpen() and self.serial.in_waiting:
+            if self.port_var.get() and self.serial.isOpen() and self.serial.in_waiting:
                 packet = self.serial.readline().decode('utf')
                 self.scroll_text.insert(tk.INSERT, packet)
                 self.scroll_text.see("end")
@@ -116,6 +121,25 @@ class PlotterAPI:
                     self.semaphore.release()
             else:
                 time.sleep(0.2)
+
+    def write_to_port(self, line: str, semaphore=False):
+        if semaphore:
+            self.semaphore.acquire()
+        if line.endswith('\n'):
+            self.serial.write(line.encode())
+        else:
+            self.serial.write((line + '\n').encode())
+
+    def change_pen_position(self):
+        self.write_to_port('M301\n', semaphore=True)
+
+    def controls_state(self):
+        if self.widgets_list:
+            for widget in self.widgets_list:
+                if self.port_var.get():
+                    widget.config(state=tk.NORMAL)
+                else:
+                    widget.config(state=tk.DISABLED)
 
 
 def get_ports_list() -> list:
