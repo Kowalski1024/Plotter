@@ -6,7 +6,7 @@ import threading
 import tkinter as tk
 from tkinter import scrolledtext, filedialog
 
-WINDOW_SIZE = '324x460'
+WINDOW_SIZE = '384x460'
 
 
 class PlotterAPI:
@@ -57,14 +57,14 @@ class PlotterAPI:
         # plotter controls
         self.controls_frame = tk.LabelFrame(self.main_frame, text="Plotter Controls", padx=5, pady=5)
         self.controls_frame.grid(row=0, column=2, rowspan=2)
-        widget_2 = tk.Button(self.controls_frame, text="Set Home")
+        widget_2 = tk.Button(self.controls_frame, text="Current Position", command=self.print_curr_position)
         widget_2.grid(row=0, column=0)
-        widget_3 = tk.Button(self.controls_frame, text="Home")
+        widget_3 = tk.Button(self.controls_frame, text="Home", command=self.auto_home)
         widget_3.grid(row=0, column=1)
         widget_4 = tk.Button(self.controls_frame, text="Pen", command=self.change_pen_position)
         widget_4.grid(row=0, column=2)
         self.widgets_list += [widget_1, widget_2, widget_3, widget_4]
-        tk.Label(self.controls_frame, text="Arrow keys to jog in x-y axis").grid(row=1, column=0, columnspan=3)
+        # tk.Label(self.controls_frame, text="Arrow keys to jog in x-y axis").grid(row=1, column=0, columnspan=3)
 
         self.parent.columnconfigure(0, weight=1)
         self.parent.rowconfigure(1, weight=1)
@@ -117,7 +117,7 @@ class PlotterAPI:
                 packet = self.serial.readline().decode('utf')
                 self.scroll_text.insert(tk.INSERT, packet)
                 self.scroll_text.see("end")
-                if packet == 'ok':
+                if packet.startswith('ok'):
                     self.semaphore.release()
             else:
                 time.sleep(0.2)
@@ -132,6 +132,12 @@ class PlotterAPI:
 
     def change_pen_position(self):
         self.write_to_port('M301\n', semaphore=True)
+
+    def auto_home(self):
+        self.write_to_port('G28', semaphore=True)
+
+    def print_curr_position(self):
+        self.write_to_port('M114', semaphore=True)
 
     def controls_state(self):
         if self.widgets_list:
@@ -168,6 +174,6 @@ def get_ports_list() -> list:
 if __name__ == '__main__':
     root = tk.Tk()
     root.geometry(WINDOW_SIZE)
-    root.title("Plotter API by Kowalski1024")
+    root.title("Plotter API")
     PlotterAPI(root)
     root.mainloop()
