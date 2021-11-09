@@ -174,6 +174,6 @@ def get_ports_list() -> list:
 if __name__ == '__main__':
     root = tk.Tk()
     root.geometry(WINDOW_SIZE)
-    root.title("Plotter API")
+    root.title("Plotter interface")
     PlotterAPI(root)
     root.mainloop()
