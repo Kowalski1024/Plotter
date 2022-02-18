@@ -176,7 +176,6 @@ void processLine(char *line, int size)
         }
         break;
       case 300:
-      {
         index_Other = strchr(line + currentIdx, 'S');
         if (!index_Other)
         {
@@ -193,7 +192,6 @@ void processLine(char *line, int size)
           penUp();
         }
         break;
-      }
       case 114:
         double x = stepperX.currentPosition() / stepsPerMillimeter;
         double y = stepperY.currentPosition() / stepsPerMillimeter;

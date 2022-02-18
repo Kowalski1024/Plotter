@@ -35,6 +35,8 @@ class PlotterAPI:
         self.port_frame.grid(row=0, column=0)
 
         ports = get_ports_list()
+        if not ports:
+            ports = [None]
         self.menu_str = tk.StringVar()
         self.menu_str.set("None")
         self.port_menu = tk.OptionMenu(self.port_frame, self.menu_str, *ports)
